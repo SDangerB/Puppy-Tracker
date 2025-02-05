@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitness Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+            font-size: 16px;
+        }
+        .cyberpunk-btn {
+            background-color: #00ff00;
+            color: black;
+            border: 2px solid #00ff00;
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .cyberpunk-btn:hover {
+            background-color: black;
+            color: #00ff00;
+        }
+        #workoutList, #statsArea, #calendarArea {
+            background-color: #1e1e1e;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #2a2a2a;
+            color: white;
+            border: 1px solid #00ff00;
+        }
+        .workout-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #2a2a2a;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        .timer-container {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .timer-btn {
+            flex-grow: 1;
+        }
+        #timerDisplay {
+            text-align: center;
+            font-size: 3rem;
+            margin: 20px 0;
+        }
+        @keyframes redFlash {
+            0%, 100% { background-color: #121212; }
+            50% { background-color: #ff0000; }
+        }
+        .timer-alarm {
+            animation: redFlash 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="timerSection">
+        <div class="timer-container">
+            <button class="cyberpunk-btn timer-btn" data-time="30">30s Timer</button>
+            <button class="cyberpunk-btn timer-btn" data-time="60">60s Timer</button>
+            <button class="cyberpunk-btn timer-btn" data-time="300">5m Timer</button>
+        </div>
+        <div id="timerDisplay"></div>
+    </div>
+
+    <div id="workoutInputArea">
+        <select id="exerciseType">
+            <option value="Inclined Pushups">Inclined Pushups</option>
+            <option value="Planks">Planks</option>
+            <option value="Pushups">Pushups</option>
+            <option value="Squats">Squats</option>
+            <option value="Pullups">Pullups</option>
+        </select>
+        <input type="number" id="repCount" placeholder="Number of Reps/Seconds">
+        <button class="cyberpunk-btn" id="logWorkout">Log Workout</button>
+    </div>
+
+    <div id="workoutList"></div>
+
+    <div id="statsArea">
+        <h3>Stats</h3>
+        <div id="totalWorkouts"></div>
+        <div id="personalBests"></div>
+    </div>
+
+    <div id="calendarArea">
+        <h3>Recent Workouts</h3>
+        <div class="calendar-nav">
+            <button class="cyberpunk-btn" id="prevDay">Previous Day</button>
+            <button class="cyberpunk-btn" id="nextDay">Next Day</button>
+        </div>
+        <div id="calendarContent"></div>
+    </div>
+
+    <script>
+        class FitnessTracker {
+            constructor() {
+                this.currentTimer = null;
+                this.workouts = this.safeGetItem('workouts') || {};
+                this.currentDay = new Date();
+                this.initializeEventListeners();
+                this.updateWorkoutList();
+                this.updateStats();
+                this.updateCalendar();
+            }
+
+            formatTime(date) {
+                return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+
+            safeGetItem(key) {
+                try {
+                    const item = localStorage.getItem(key);
+                    return item ? JSON.parse(item) : {};
+                } catch (e) {
+                    console.warn('localStorage access failed, using memory storage', e);
+                    return this[`_${key}`] || {};
+                }
+            }
+
+            safeSetItem(key, value) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(value));
+                } catch (e) {
+                    console.warn('localStorage set failed, using memory storage', e);
+                    this[`_${key}`] = value;
+                }
+            }
+
+            initializeEventListeners() {
+                document.getElementById('logWorkout').addEventListener('click', () => this.logWorkout());
+                
+                document.querySelectorAll('.timer-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.toggleTimer(parseInt(e.target.dataset.time)));
+                });
+
+                document.getElementById('prevDay').addEventListener('click', () => this.changeDay(-1));
+                document.getElementById('nextDay').addEventListener('click', () => this.changeDay(1));
+            }
+
+            logWorkout() {
+                const exercise = document.getElementById('exerciseType').value;
+                const reps = document.getElementById('repCount').value;
+                
+                if (!reps) {
+                    alert('Please enter number of reps/seconds');
+                    return;
+                }
+
+                const date = new Date().toISOString().split('T')[0];
+                const timestamp = this.formatTime(new Date());
+
+                if (!this.workouts[date]) {
+                    this.workouts[date] = [];
+                }
+
+                this.workouts[date].push({
+                    exercise: exercise,
+                    reps: reps,
+                    timestamp: timestamp,
+                    fullTimestamp: new Date().toISOString()
+                });
+
+                this.safeSetItem('workouts', this.workouts);
+                this.updateWorkoutList();
+                this.updateStats();
+                this.updateCalendar();
+
+                // Clear input after logging
+                document.getElementById('repCount').value = '';
+            }
+
+            updateWorkoutList() {
+                const workoutList = document.getElementById('workoutList');
+                const today = new Date().toISOString().split('T')[0];
+                const todaysWorkouts = this.workouts[today] || [];
+
+                workoutList.innerHTML = '<h3>Today\'s Workouts</h3>';
+                todaysWorkouts.forEach((workout, index) => {
+                    const workoutDiv = document.createElement('div');
+                    workoutDiv.classList.add('workout-entry');
+                    workoutDiv.innerHTML = `
+                        ${workout.exercise}: ${workout.reps} - ${workout.timestamp}
+                        <button onclick="tracker.removeWorkout(${index})">❌</button>
+                    `;
+                    workoutList.appendChild(workoutDiv);
+                });
+            }
+
+            removeWorkout(index) {
+                const today = new Date().toISOString().split('T')[0];
+                this.workouts[today].splice(index, 1);
+                this.safeSetItem('workouts', this.workouts);
+                this.updateWorkoutList();
+                this.updateStats();
+                this.updateCalendar();  // Added this line to update calendar
+            }
+
+            updateStats() {
+                const totalWorkouts = document.getElementById('totalWorkouts');
+                const personalBests = document.getElementById('personalBests');
+                const bests = {};
+
+                // Flatten all workouts and find personal bests
+                Object.values(this.workouts).flat().forEach(workout => {
+                    if (!bests[workout.exercise] || parseInt(workout.reps) > parseInt(bests[workout.exercise])) {
+                        bests[workout.exercise] = workout.reps;
+                    }
+                });
+
+                // Calculate total number of workouts
+                const totalWorkoutsCount = Object.values(this.workouts).flat().length;
+
+                // Update total workouts display
+                totalWorkouts.innerHTML = `<strong>Total Workouts:</strong> ${totalWorkoutsCount}`;
+                
+                // Update personal bests display
+                personalBests.innerHTML = '<strong>Personal Bests:</strong><br>' + 
+                    Object.entries(bests).map(([exercise, reps]) => 
+                        `${exercise}: ${reps}`
+                    ).join('<br>');
+            }
+
+            toggleTimer(seconds) {
+                const timerDisplay = document.getElementById('timerDisplay');
+                
+                // If a timer is already running, cancel it
+                if (this.currentTimer) {
+                    clearInterval(this.currentTimer.interval);
+                    timerDisplay.textContent = '';
+                    document.body.classList.remove('timer-alarm');
+                    
+                    // If the same timer is clicked, just cancel
+                    if (this.currentTimer.seconds === seconds) {
+                        this.currentTimer = null;
+                        return;
+                    }
+                }
+
+                let remainingTime = seconds;
+
+                this.currentTimer = {
+                    seconds: seconds,
+                    interval: setInterval(() => {
+                        timerDisplay.textContent = `${remainingTime}`;
+                        
+                        if (remainingTime <= 0) {
+                            clearInterval(this.currentTimer.interval);
+                            timerDisplay.textContent = 'Time\'s Up!';
+                            document.body.classList.add('timer-alarm');
+                            
+                            setTimeout(() => {
+                                document.body.classList.remove('timer-alarm');
+                                timerDisplay.textContent = '';
+                                this.currentTimer = null;
+                            }, 5000);
+                        }
+                        
+                        remainingTime--;
+                    }, 1000)
+                };
+            }
+
+            changeDay(direction) {
+                const newDate = new Date(this.currentDay);
+                newDate.setDate(newDate.getDate() + direction);
+                this.currentDay = newDate;
+                this.updateCalendar();
+            }
+
+            updateCalendar() {
+                const calendarContent = document.getElementById('calendarContent');
+                const dateString = this.currentDay.toISOString().split('T')[0];
+                const dayWorkouts = this.workouts[dateString] || [];
+
+                calendarContent.innerHTML = `<strong>${this.currentDay.toDateString()}</strong>`;
+                
+                dayWorkouts.forEach(workout => {
+                    const workoutEntry = document.createElement('div');
+                    workoutEntry.textContent = `${workout.exercise}: ${workout.reps} - ${workout.timestamp}`;
+                    calendarContent.appendChild(workoutEntry);
+                });
+            }
+       }
+
+        const tracker = new FitnessTracker();
+    </script>
+</body>
+</html>
