@@ -33,7 +33,7 @@
             background-color: black;
             color: #00ff00;
         }
-        #workoutList, #statsArea, #calendarArea {
+        #statsArea, #calendarArea {
             background-color: #1e1e1e;
             padding: 15px;
             margin: 10px 0;
@@ -75,6 +75,22 @@
         .timer-alarm {
             animation: redFlash 1s infinite;
         }
+        .delete-btn {
+            background-color: rgba(255, 68, 68, 0.1);
+            border: none;
+            color: #ff4444;
+            cursor: pointer;
+            padding: 2px 6px;
+            margin-left: 8px;
+            font-size: 14px;
+            line-height: 1;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+        .delete-btn:hover {
+            background-color: rgba(255, 68, 68, 0.2);
+            color: #ff0000;
+        }
     </style>
 </head>
 <body>
@@ -91,20 +107,26 @@
         <select id="exerciseType">
             <option value="Inclined Pushups">Inclined Pushups</option>
             <option value="Planks">Planks</option>
+            <option value="Inclined-Planks">Inclined Planks</option>
+            <option value="Side-Planks">Side Planks</option>
             <option value="Pushups">Pushups</option>
             <option value="Squats">Squats</option>
             <option value="Pullups">Pullups</option>
+            <option value="Pullup-Hang">Pullup Hang</option>
+            <option value="Curl-Sets">Curl Sets</option>
+            <option value="Stationary-Bike">Stationary Bike</option>
+            <option value="Walk-Jog-Mix">Walk Jog Mix</option>
+            <option value="Run">Run</option>
+            <option value="Situps">Situps</option>
+            <option value="Calf-Raises">Calf Raises</option>
+            <option value="Wall-Sits">Wall Sits</option>
+            <option value="Jumping-Jacks">Jumping Jacks</option>
+            <option value="Oblique-Twists">Oblique Twists</option>
+            <option value="Glute-Squeezes">Glute Squeezes</option>
+            <option value="Seated-Flutter-Kicks">Seated Flutter Kicks</option>
         </select>
         <input type="number" id="repCount" placeholder="Number of Reps/Seconds">
         <button class="cyberpunk-btn" id="logWorkout">Log Workout</button>
-    </div>
-
-    <div id="workoutList"></div>
-
-    <div id="statsArea">
-        <h3>Stats</h3>
-        <div id="totalWorkouts"></div>
-        <div id="personalBests"></div>
     </div>
 
     <div id="calendarArea">
@@ -116,6 +138,12 @@
         <div id="calendarContent"></div>
     </div>
 
+    <div id="statsArea">
+        <h3>Stats</h3>
+        <div id="totalWorkouts"></div>
+        <div id="personalBests"></div>
+    </div>
+
     <script>
         class FitnessTracker {
             constructor() {
@@ -123,7 +151,6 @@
                 this.workouts = this.safeGetItem('workouts') || {};
                 this.currentDay = new Date();
                 this.initializeEventListeners();
-                this.updateWorkoutList();
                 this.updateStats();
                 this.updateCalendar();
             }
@@ -138,7 +165,7 @@
                     return item ? JSON.parse(item) : {};
                 } catch (e) {
                     console.warn('localStorage access failed, using memory storage', e);
-                    return this[`_${key}`] || {};
+                    return this[key] || {};
                 }
             }
 
@@ -147,7 +174,7 @@
                     localStorage.setItem(key, JSON.stringify(value));
                 } catch (e) {
                     console.warn('localStorage set failed, using memory storage', e);
-                    this[`_${key}`] = value;
+                    this[key] = value;
                 }
             }
 
@@ -171,7 +198,7 @@
                     return;
                 }
 
-                const date = new Date().toISOString().split('T')[0];
+                const date = new Date().toLocaleDateString('en-CA');
                 const timestamp = this.formatTime(new Date());
 
                 if (!this.workouts[date]) {
@@ -186,38 +213,22 @@
                 });
 
                 this.safeSetItem('workouts', this.workouts);
-                this.updateWorkoutList();
                 this.updateStats();
                 this.updateCalendar();
 
-                // Clear input after logging
                 document.getElementById('repCount').value = '';
             }
 
-            updateWorkoutList() {
-                const workoutList = document.getElementById('workoutList');
-                const today = new Date().toISOString().split('T')[0];
-                const todaysWorkouts = this.workouts[today] || [];
-
-                workoutList.innerHTML = '<h3>Today\'s Workouts</h3>';
-                todaysWorkouts.forEach((workout, index) => {
-                    const workoutDiv = document.createElement('div');
-                    workoutDiv.classList.add('workout-entry');
-                    workoutDiv.innerHTML = `
-                        ${workout.exercise}: ${workout.reps} - ${workout.timestamp}
-                        <button onclick="tracker.removeWorkout(${index})">❌</button>
-                    `;
-                    workoutList.appendChild(workoutDiv);
-                });
-            }
-
-            removeWorkout(index) {
-                const today = new Date().toISOString().split('T')[0];
-                this.workouts[today].splice(index, 1);
-                this.safeSetItem('workouts', this.workouts);
-                this.updateWorkoutList();
-                this.updateStats();
-                this.updateCalendar();  // Added this line to update calendar
+            removeWorkout(date, index) {
+                if (confirm('Are you sure you want to delete this workout?')) {
+                    this.workouts[date].splice(index, 1);
+                    if (this.workouts[date].length === 0) {
+                        delete this.workouts[date];
+                    }
+                    this.safeSetItem('workouts', this.workouts);
+                    this.updateStats();
+                    this.updateCalendar();
+                }
             }
 
             updateStats() {
@@ -225,36 +236,30 @@
                 const personalBests = document.getElementById('personalBests');
                 const bests = {};
 
-                // Flatten all workouts and find personal bests
                 Object.values(this.workouts).flat().forEach(workout => {
                     if (!bests[workout.exercise] || parseInt(workout.reps) > parseInt(bests[workout.exercise])) {
                         bests[workout.exercise] = workout.reps;
                     }
                 });
 
-                // Calculate total number of workouts
                 const totalWorkoutsCount = Object.values(this.workouts).flat().length;
 
-                // Update total workouts display
                 totalWorkouts.innerHTML = `<strong>Total Workouts:</strong> ${totalWorkoutsCount}`;
                 
-                // Update personal bests display
                 personalBests.innerHTML = '<strong>Personal Bests:</strong><br>' + 
                     Object.entries(bests).map(([exercise, reps]) => 
-                        `${exercise}: ${reps}`
+                        `<span>${exercise}: ${reps}</span>`
                     ).join('<br>');
             }
 
             toggleTimer(seconds) {
                 const timerDisplay = document.getElementById('timerDisplay');
                 
-                // If a timer is already running, cancel it
                 if (this.currentTimer) {
                     clearInterval(this.currentTimer.interval);
                     timerDisplay.textContent = '';
                     document.body.classList.remove('timer-alarm');
                     
-                    // If the same timer is clicked, just cancel
                     if (this.currentTimer.seconds === seconds) {
                         this.currentTimer = null;
                         return;
@@ -294,18 +299,22 @@
 
             updateCalendar() {
                 const calendarContent = document.getElementById('calendarContent');
-                const dateString = this.currentDay.toISOString().split('T')[0];
+                const dateString = this.currentDay.toLocaleDateString('en-CA');
                 const dayWorkouts = this.workouts[dateString] || [];
 
                 calendarContent.innerHTML = `<strong>${this.currentDay.toDateString()}</strong>`;
                 
-                dayWorkouts.forEach(workout => {
+                dayWorkouts.forEach((workout, index) => {
                     const workoutEntry = document.createElement('div');
-                    workoutEntry.textContent = `${workout.exercise}: ${workout.reps} - ${workout.timestamp}`;
+                    workoutEntry.classList.add('workout-entry');
+                    workoutEntry.innerHTML = `
+                        ${workout.exercise}: ${workout.reps} - ${workout.timestamp}
+                        <button class="delete-btn" onclick="tracker.removeWorkout('${dateString}', ${index})">×</button>
+                    `;
                     calendarContent.appendChild(workoutEntry);
                 });
             }
-       }
+        }
 
         const tracker = new FitnessTracker();
     </script>
